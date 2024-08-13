@@ -2,8 +2,8 @@
 
 # Ensure the script is run as root
 if [[ $EUID -ne 0 ]]; then
-   echo "This script must be run as root"
-   exit 1
+    echo "This script must be run as root"
+    exit 1
 fi
 
 # Validate input
@@ -13,46 +13,68 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
+SITENAME=$1
+BASE_DOCUMENT_ROOT="/opt/lampp/htdocs/$SITENAME"
+DOCUMENT_ROOT="$BASE_DOCUMENT_ROOT/public_html/public"
+LOGS_DIR="/opt/lampp/htdocs/logs/$SITENAME"
+VHOST_CONF="/opt/lampp/etc/extra/httpd-vhosts.conf"
+
 # Create necessary directories
-mkdir -p /opt/lampp/htdocs/$1/public_html/public
-mkdir -p /opt/lampp/htdocs/logs/$1
+mkdir -p "$DOCUMENT_ROOT"
+mkdir -p "$LOGS_DIR"
 
 # Add user to apache group
 usermod -a -G www-data $USER
 
 # Set file ownership and permissions
-chown -R www-data:www-data /opt/lampp/htdocs/$1
-chmod -R 0755 /opt/lampp/htdocs/$1
+chown -R www-data:www-data "$BASE_DOCUMENT_ROOT"
+chmod -R 0755 "$BASE_DOCUMENT_ROOT"
 
 # Create a sample index.html file
-cat > /opt/lampp/htdocs/$1/public_html/public/index.html <<EOF
+cat > "$DOCUMENT_ROOT/index.html" <<EOF
 <html>
   <head>
-    <title>Welcome to $1!</title>
+    <title>Welcome to $SITENAME!</title>
   </head>
   <body>
-    <h1>Success! The $1 virtual host is working!</h1>
+    <h1>Success! The $SITENAME virtual host is working!</h1>
   </body>
 </html>
 EOF
 
 # Create a placeholder file for .git
-cat > /opt/lampp/htdocs/$1/public_html/put_git_here.txt <<EOF
+cat > "$BASE_DOCUMENT_ROOT/public_html/put_git_here.txt" <<EOF
 put .git here and not in public folder!
 EOF
 
+# Function to ensure the Include line is uncommented in httpd.conf
+uncomment_include_vhosts() {
+    local conf_file="/opt/lampp/etc/httpd.conf"
+    local include_line="Include etc/extra/httpd-vhosts.conf"
+
+    if grep -q "^#.*$include_line" "$conf_file"; then
+        echo "Uncommenting the Include line in $conf_file..."
+        sed -i "s|^#\s*$include_line|$include_line|g" "$conf_file"
+    else
+        echo "Include line is already uncommented or not found in $conf_file."
+    fi
+}
+
+# Uncomment the Include line in httpd.conf
+uncomment_include_vhosts
+
 # Add the virtual host configuration to httpd-vhosts.conf
-cat >> /opt/lampp/etc/extra/httpd-vhosts.conf <<EOF
+cat >> "$VHOST_CONF" <<EOF
 
 <VirtualHost *:80>
-    ServerAdmin admin@$1
-    ServerName $1
-    ServerAlias www.$1
-    DocumentRoot /opt/lampp/htdocs/$1/public_html/public
-    ErrorLog /opt/lampp/htdocs/logs/$1/error.log
-    CustomLog /opt/lampp/htdocs/logs/$1/access.log combined
+    ServerAdmin admin@$SITENAME
+    ServerName $SITENAME
+    ServerAlias www.$SITENAME
+    DocumentRoot $DOCUMENT_ROOT
+    ErrorLog $LOGS_DIR/error.log
+    CustomLog $LOGS_DIR/access.log combined
 
-    <Directory /opt/lampp/htdocs/$1/public_html/public>
+    <Directory $DOCUMENT_ROOT>
         Options -Indexes
         AllowOverride All
         Require all granted
@@ -71,20 +93,11 @@ fi
 /opt/lampp/lampp restart
 
 # Add the domain to /etc/hosts for local testing
-echo "127.0.0.1 $1" >> /etc/hosts
+if ! grep -q "$SITENAME" /etc/hosts; then
+    echo "127.0.0.1 $SITENAME" >> /etc/hosts
+    echo "Added $SITENAME to /etc/hosts"
+else
+    echo "$SITENAME already exists in /etc/hosts"
+fi
 
-echo "Virtual host $1 created and added to /opt/lampp/etc/extra/httpd-vhosts.conf."
-
-# for the ubuntu lampp refactored code i need you to
-# Make a version of this for XAMPP MacOS
-# this is the htdocs location: /Applications/XAMPP/xamppfiles/htdocs
-# this is the vhosts file location: /Applications/XAMPP/xamppfiles/etc/extra/httpd-vhosts.conf
-# Remove this "public_html/public" no need or make $1 as default and also make it to accept string for custom path
-# also remote the placeholder file for .git
-# Use this code to restart the XAMPP "sudo /Applications/XAMPP/xamppfiles/xampp restart"
-
-
-# here are some changes i want to make
-# remove sudo for restarting xampp
-# check what if xampp is not started yet? do you restart it or just start it
-# check line by line for any bug that might occur and fix it.
+echo "Virtual host $SITENAME created and added to $VHOST_CONF."

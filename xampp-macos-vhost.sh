@@ -7,6 +7,19 @@
 # This will set the document root to /Applications/XAMPP/xamppfiles/htdocs/webtest.org/public
 # If custom path is not provided, it will default to /Applications/XAMPP/xamppfiles/htdocs/sitename.domain
 
+# Function to check and uncomment the Include line in httpd.conf
+uncomment_include_vhosts() {
+    local conf_file="/Applications/XAMPP/xamppfiles/etc/httpd.conf"
+    local include_line="Include etc/extra/httpd-vhosts.conf"
+
+    if grep -q "^#.*$include_line" "$conf_file"; then
+        echo "Uncommenting the Include line in $conf_file..."
+        sudo sed -i '' "s|^#\s*${include_line}|${include_line}|g" "$conf_file"
+    else
+        echo "Include line is already uncommented or not found in $conf_file."
+    fi
+}
+
 # Validate input
 if [ -z "$1" ]; then
   echo "Error: No sitename.domain provided"
@@ -24,6 +37,9 @@ if [[ "$DOCUMENT_ROOT" != /Applications/XAMPP/xamppfiles/htdocs/* ]]; then
   echo "Error: Document root must be inside /Applications/XAMPP/xamppfiles/htdocs/"
   exit 1
 fi
+
+# Uncomment the Include line in httpd.conf
+uncomment_include_vhosts
 
 # Create necessary directories
 mkdir -p "$DOCUMENT_ROOT"
