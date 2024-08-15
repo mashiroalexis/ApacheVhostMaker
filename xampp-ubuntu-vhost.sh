@@ -9,15 +9,31 @@ fi
 # Validate input
 if [ -z "$1" ]; then
     echo "Error: No sitename.domain provided"
-    echo "Usage: sudo bash ~/vhost/new-vhost.sh [sitename.domain]"
+    echo "Usage: sudo bash ~/vhost/new-vhost.sh [sitename.domain] [custom_path]"
     exit 1
 fi
 
 SITENAME=$1
+CUSTOM_PATH=$2
 BASE_DOCUMENT_ROOT="/opt/lampp/htdocs/$SITENAME"
-DOCUMENT_ROOT="$BASE_DOCUMENT_ROOT/public_html/public"
+
+# Determine the document root
+if [ -z "$CUSTOM_PATH" ]; then
+    DOCUMENT_ROOT="$BASE_DOCUMENT_ROOT"
+else
+    # Remove leading slash from CUSTOM_PATH if present
+    CUSTOM_PATH=$(echo "$CUSTOM_PATH" | sed 's|^/||')
+    DOCUMENT_ROOT="$BASE_DOCUMENT_ROOT/$CUSTOM_PATH"
+fi
+
 LOGS_DIR="/opt/lampp/htdocs/logs/$SITENAME"
 VHOST_CONF="/opt/lampp/etc/extra/httpd-vhosts.conf"
+
+# Check if the virtual host already exists
+if grep -q "ServerName $SITENAME" "$VHOST_CONF"; then
+    echo "Virtual host $SITENAME already exists in $VHOST_CONF."
+    exit 1
+fi
 
 # Create necessary directories
 mkdir -p "$DOCUMENT_ROOT"
@@ -40,11 +56,6 @@ cat > "$DOCUMENT_ROOT/index.html" <<EOF
     <h1>Success! The $SITENAME virtual host is working!</h1>
   </body>
 </html>
-EOF
-
-# Create a placeholder file for .git
-cat > "$BASE_DOCUMENT_ROOT/public_html/put_git_here.txt" <<EOF
-put .git here and not in public folder!
 EOF
 
 # Function to ensure the Include line is uncommented in httpd.conf
@@ -70,11 +81,11 @@ cat >> "$VHOST_CONF" <<EOF
     ServerAdmin admin@$SITENAME
     ServerName $SITENAME
     ServerAlias www.$SITENAME
-    DocumentRoot $DOCUMENT_ROOT
-    ErrorLog $LOGS_DIR/error.log
-    CustomLog $LOGS_DIR/access.log combined
+    DocumentRoot "$DOCUMENT_ROOT"
+    ErrorLog "$LOGS_DIR/error.log"
+    CustomLog "$LOGS_DIR/access.log" combined
 
-    <Directory $DOCUMENT_ROOT>
+    <Directory "$DOCUMENT_ROOT">
         Options -Indexes
         AllowOverride All
         Require all granted
@@ -89,7 +100,6 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Restart Apache server
 /opt/lampp/lampp restart
 
 # Add the domain to /etc/hosts for local testing
